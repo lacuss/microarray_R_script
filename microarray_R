@@ -1,0 +1,376 @@
+microarray_R_script
+===================
+
+
+################################################
+#chip process
+###############################################
+library(oligo)
+library(pd.hugene.2.0.st) #please change your chip. it is mouse chip.
+
+celFiles <- list.celfiles()
+affyRaw <- read.celfiles(celFiles,pkgname="pd.hugene.2.0.st")  #please change pkgname. it is mouse chip.
+probesetSummaries <- rma(affyRaw, target="probeset") #probe base RMA normalization
+geneSummaries <- rma(affyRaw, target="core") #gene base RMA normalization
+
+
+pdf("boxplot.pdf") #please make boxplot for your data. you have to check difference.
+boxplot(affyRaw,main="raw data")
+boxplot(probesetSummaries,main="probe base normalization")
+boxplot(geneSummaries,main="gene base normalization")
+dev.off()
+
+
+pdf("Hierarchical_clustering.pdf")
+m<-t(exprs(affyRaw))
+d <- dist(m)
+fit <- hclust(d) 
+plot(fit,main="raw data")
+m<-t(exprs(probesetSummaries))
+d <- dist(m)
+fit <- hclust(d) 
+plot(fit,main="probe base normalization data")
+m<-t(exprs(geneSummaries))
+d <- dist(m)
+fit <- hclust(d) 
+plot(fit,main="gene base normalization data")
+dev.off()
+
+#make expression matrix file
+write.exprs(eset,file="data.txt")
+write.exprs(affRaw,file="raw_matrix.txt",sep="\t")
+write.exprs(probesetSummaries,file="normalization_prob_matrix.txt",sep="\t")
+write.exprs(geneSummaries,file="normalization_gene_matrix.txt",sep="\t")
+
+
+
+########################################################################
+#DEG selection by limma
+#######################################################################
+
+library(limma)
+x<-read.table("normalization_prob_matrix.txt",sep="\t",head=TRUE,row.names=1)
+#this chip design same like your chip
+#AHHF : Ahnak KO in high fat 
+#AHRC : Ahnak KO in normal
+#B6HF : without KO in high fat
+#B6RC : without KO in normal
+#CtrlDMSO
+#CtrlBAI
+#MSHsiDMSO
+#MSHsiBAI
+
+CtrlDMSO <- cbind(x$CtrlDMSO1.CEL,x$CtrlDMSO2.CEL)
+CtrlDMSO <- cbind(CtrlDMSO,x$CtrlDMSO3.CEL)
+CtrlBAI <- cbind(x$CtrlBAI1.CEL,x$CtrlBAI2.CEL)
+CtrlBAI <- cbind(CtrlBAI,x$CtrlBAI3.CEL)
+MSHsiDMSO <- cbind(x$MSHsiDMSO1.CEL,x$MSHsiDMSO2.CEL)
+MSHsiDMSO <- cbind(MSHsiDMSO,x$MSHsiDMSO3.CEL)
+MSHsiBAI <- cbind(x$MSHsiBAI1.CEL,x$MSHsiBAI2.CEL)
+MSHsiBAI <- cbind(MSHsiBAI,x$MSHsiBAI3.CEL)
+
+#AHHF_fas<-cbind(x$AHHF.1m.fas,x$AHHF.2m.fas)
+#AHHF_fas<-cbind(AHHF.fas,x$AHHF.3m.fas)
+#AHRC_fas<-cbind(x$AHRC.1m.fas,x$AHRC.2m.fas)
+#AHRC_fas<-cbind(AHRC_fas,x$AHRC.3m.fas)
+#B6HF_fas<-cbind(x$B6HF.1m.fas,x$B6HF.2m.fas)
+#B6HF_fas<-cbind(B6HF_fas,x$B6HF.3m.fas)
+#B6RC_fas<-cbind(x$B6RC.1m.fas,x$B6RC.2m.fas)
+#B6RC_fas<-cbind(B6RC_fas,x$B6RC.3m.fas)
+
+#AHHF_fed<-cbind(x$AHHF.1m.fed,x$AHHF.2m.fed)
+#AHHF_fed<-cbind(AHHF_fed,x$AHHF.3m.fed)
+#AHRC_fed<-cbind(x$AHRC.1m.fed,x$AHRC.2m.fed)
+#AHRC_fed<-cbind(AHRC_fed,x$AHRC.3m.fed)
+#B6HF_fed<-cbind(x$B6HF.1m.fed,x$B6HF.2m.fed)
+#B6HF_fed<-cbind(B6HF_fed,x$B6HF.3m.fed)
+
+
+########
+#annotation
+#Symbol <- getSYMBOL(ID, "hugene20sttranscriptcluster.db")
+#Name <- as.character(lookUp(ID, "hugene20sttranscriptcluster.db", "GENENAME"))
+#Ensembl <- as.character(lookUp(ID, "hugene20sttranscriptcluster.db", "ENSEMBL"))
+#Annot <- data.frame(ACCNUM=sapply(contents(hugene20sttranscriptclusterACCNUM), paste, collapse=", "), SYMBOL=sapply(contents(hugene20sttranscriptclusterSYMBOL), paste, collapse=", "), DESC=sapply(contents(hugene20sttranscriptclusterGENENAME), paste, collapse=", "))
+########
+
+#design <-as.matrix(cbind(B6RC_fas=c(1,1,1,0,0,0),AHRC_fas=c(0,0,0,1,1,1)))
+design <-as.matrix(cbind(CtrlDMSO=c(1,1,1,0,0,0), CtrlBAI=c(0,0,0,1,1,1)))
+
+
+#x.rma<-cbind(B6RC_fas,AHRC_fas)
+#fit <- lmFit(x.rma,design)
+#cont.matrix <- makeContrasts(B6RC_fasvsAHRC_fas=AHRC_fas-B6RC_fas,levels=design)
+#fit2 <- contrasts.fit(fit,cont.matrix)
+#fit2 <- eBayes(fit2)
+
+#fit2$genes$Symbol=rownames(x)
+#write.table(topTable(fit2, adjust="BH",number = 500000), file="B6RC_fas_vs_AHRC_fas_gene.txt", row.names = TRUE, col.names = TRUE, sep ="\t")
+
+x.rma<-cbind(CtrlDMSO,CtrlBAI)
+fit <- lmFit(x.rma,design)
+cont.matrix <- makeContrasts(CtrlDMSOvsCtrlBAI=CtrlBAI-CtrlDMSO,levels=design)
+fit2 <- contrasts.fit(fit,cont.matrix)
+fit2 <- eBayes(fit2)
+
+fit2$genes$Symbol=rownames(x)
+write.table(topTable(fit2, adjust="BH",number = 500000), file="CtrlDMSO_vs_CtrlBAI_gene.txt", row.names = TRUE, col.names = TRUE, sep ="\t")
+
+
+
+
+design <-as.matrix(cbind(B6HF_fas=c(1,1,1,0,0,0),AHHF_fas=c(0,0,0,1,1,1)))
+
+x.rma<-cbind(B6HF_fas,AHHF_fas)
+fit <- lmFit(x.rma,design)
+cont.matrix <- makeContrasts(B6HF_fasvsAHHF_fas=AHHF_fas-B6HF_fas,levels=design)
+fit2 <- contrasts.fit(fit,cont.matrix)
+fit2 <- eBayes(fit2)
+
+fit2$genes$Symbol=rownames(x)
+write.table(topTable(fit2, adjust="BH",number = 500000), file="B6HF_fas_vs_AHHF_fas_gene.txt", row.names = TRUE, col.names = TRUE, sep ="\t")
+
+
+design <-as.matrix(cbind(B6HF_fed=c(1,1,1,0,0,0),AHHF_fed=c(0,0,0,1,1,1)))
+
+x.rma<-cbind(B6HF_fed,AHHF_fed)
+fit <- lmFit(x.rma,design)
+cont.matrix <- makeContrasts(B6HF_fedvsAHHF_fed=AHHF_fed-B6HF_fed,levels=design)
+fit2 <- contrasts.fit(fit,cont.matrix)
+fit2 <- eBayes(fit2)
+
+fit2$genes$Symbol=rownames(x)
+write.table(topTable(fit2, adjust="BH",number = 500000), file="B6HF_fed_vs_AHHF_fed_gene.txt", row.names = TRUE, col.names = TRUE, sep ="\t")
+
+
+
+design <-as.matrix(cbind(B6RC_fas=c(1,1,1,0,0,0),B6HF_fas=c(0,0,0,1,1,1)))
+
+x.rma<-cbind(B6RC_fas,B6HF_fas)
+fit <- lmFit(x.rma,design)
+cont.matrix <- makeContrasts(B6RC_fasvsB6HF_fas=B6HF_fas-B6RC_fas,levels=design)
+fit2 <- contrasts.fit(fit,cont.matrix)
+fit2 <- eBayes(fit2)
+
+fit2$genes$Symbol=rownames(x)
+write.table(topTable(fit2, adjust="BH",number = 500000), file="B6RC_fas_vs_B6HF_fas_gene.txt", row.names = TRUE, col.names = TRUE, sep ="\t")
+
+
+
+design <-as.matrix(cbind(AHRC_fas=c(1,1,1,0,0,0),AHHF_fas=c(0,0,0,1,1,1)))
+
+x.rma<-cbind(AHRC_fas,AHHF_fas)
+fit <- lmFit(x.rma,design)
+cont.matrix <- makeContrasts(AHRC_fasvsAHHF_fas=AHHF_fas-AHRC_fas,levels=design)
+fit2 <- contrasts.fit(fit,cont.matrix)
+fit2 <- eBayes(fit2)
+
+fit2$genes$Symbol=rownames(x)
+write.table(topTable(fit2, adjust="BH",number = 500000), file="AHRC_fas_vs_AHHF_fas_gene.txt", row.names = TRUE, col.names = TRUE, sep ="\t")
+
+
+
+
+design <-as.matrix(cbind(B6RC_fas=c(1,1,1,0,0,0),AHHF_fas=c(0,0,0,1,1,1)))
+
+x.rma<-cbind(B6RC_fas,AHHF_fas)
+fit <- lmFit(x.rma,design)
+cont.matrix <- makeContrasts(B6RC_fasvsAHHF_fas=AHHF_fas-B6RC_fas,levels=design)
+fit2 <- contrasts.fit(fit,cont.matrix)
+fit2 <- eBayes(fit2)
+
+fit2$genes$Symbol=rownames(x)
+write.table(topTable(fit2, adjust="BH",number = 500000), file="B6RC_fas_vs_AHHF_fas_gene.txt", row.names = TRUE, col.names = TRUE, sep ="\t")
+
+
+
+design <-as.matrix(cbind(B6RC_fed=c(1,1,1,0,0,0),AHHF_fed=c(0,0,0,1,1,1)))
+
+x.rma<-cbind(B6RC_fed,AHHF_fed)
+fit <- lmFit(x.rma,design)
+cont.matrix <- makeContrasts(B6RC_fedvsAHHF_fed=AHHF_fed-B6RC_fed,levels=design)
+fit2 <- contrasts.fit(fit,cont.matrix)
+fit2 <- eBayes(fit2)
+
+fit2$genes$Symbol=rownames(x)
+write.table(topTable(fit2, adjust="BH",number = 500000), file="B6RC_fed_vs_AHHF_fed_gene.txt", row.names = TRUE, col.names = TRUE, sep ="\t")
+
+
+
+
+
+
+###########################################################################################
+#NETWORK module prediction
+############################################################################################
+library(WGCNA);
+
+options(stringsAsFactors = FALSE);
+
+femData = read.table("DEG_probe_exp.txt",sep="\t",row.names=1,head=T);
+#traitData = read.table("DEG_probe_type.txt",sep="\t",row.names=1,head=T);
+traitData1 = read.table("trait.txt",sep="\t",row.names=1,head=T);
+datExpr0 = as.data.frame(t(femData));
+gsg = goodSamplesGenes(datExpr0, verbose = 3);
+gsg$allOK
+datExpr = datExpr0
+
+dim(traitData)
+names(traitData)
+# remove columns that hold information we do not need.
+allTraits = t(traitData)
+
+
+
+# Choose a set of soft-thresholding powers
+powers = c(c(1:10), seq(from = 12, to=20, by=2))
+# Call the network topology analysis function
+sft = pickSoftThreshold(datExpr, powerVector = powers, verbose = 5)
+# Plot the results:
+sizeGrWindow(9, 5)
+par(mfrow = c(1,2));
+cex1 = 0.9;
+# Scale-free topology fit index as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+main = paste("Scale independence"));
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+labels=powers,cex=cex1,col="red");
+# this line corresponds to using an R^2 cut-off of h
+abline(h=0.90,col="red")
+# Mean connectivity as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], sft$fitIndices[,5],
+xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+main = paste("Mean connectivity"))
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+
+
+net = blockwiseModules(datExpr, power = 6,
+TOMType = "unsigned", minModuleSize = 30,
+reassignThreshold = 0, mergeCutHeight = 0.25,
+numericLabels = TRUE, pamRespectsDendro = FALSE,
+saveTOMs = TRUE,
+saveTOMFileBase = "femaleMouseTOM",
+verbose = 3)
+
+# open a graphics window
+sizeGrWindow(12, 9)
+# Convert labels to colors for plotting
+mergedColors = labels2colors(net$colors)
+# Plot the dendrogram and the module colors underneath
+plotDendroAndColors(net$dendrograms[[1]], mergedColors[net$blockGenes[[1]]],
+"Module colors",
+dendroLabels = FALSE, hang = 0.03,
+addGuide = TRUE, guideHang = 0.05)
+
+moduleLabels = net$colors
+moduleColors = labels2colors(net$colors)
+MEs = net$MEs;
+geneTree = net$dendrograms[[1]];
+save(MEs, moduleLabels, moduleColors, geneTree,
+file = "FemaleLiver-02-networkConstruction-auto.RData")
+
+
+
+
+nGenes = ncol(datExpr);
+nSamples = nrow(datExpr);
+# Recalculate MEs with color labels
+MEs0 = moduleEigengenes(datExpr, moduleColors)$eigengenes
+MEs = orderMEs(MEs0)
+
+MEs1 = moduleEigengenes(datExpr, allTraits)$eigengenes
+MEsT = orderMEs(MEs1)
+modNames = substring(names(MEs), 3)
+geneModuleMembership = as.data.frame(cor(datExpr, MEs, use = "p"));
+geneTraitSignificance = as.data.frame(cor(datExpr, MEsT, use = "p"));
+
+
+modulel = c("lightcyan","purple","cyan","black","magenta","midnightblue","turquoise","greenyellow","red","tan","blue","salmon","brown","yellow","green","pink","grey")
+
+
+pdf(file = "module_cor_AHRC_fasvsAHHF_fas,AHRC_fedvsAHHF_fed.pdf");
+for(i in 1:17)
+{
+module = modulel[i]
+column = match(module, modNames);
+moduleGenes = moduleColors==module;
+
+verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+abs(geneTraitSignificance[moduleGenes, 6]),
+xlab = paste("Module Membership in", module, "module"),
+ylab = "Gene significance for AHRC_fasvsAHHF_fas,AHRC_fedvsAHHF_fed",
+main = paste("Module membership vs. gene significance\n"),
+cex.main = 1.2, cex.lliab = 1.2, cex.axis = 1.2, col = module)
+
+}
+dev.off()
+
+
+
+
+TOM = TOMsimilarityFromExpr(datExpr, power = 6);
+probes = names(datExpr)
+inModule = is.finite(match(moduleColors, modulel));
+modProbes = probes[inModule];
+
+
+
+modTOM = TOM[inModule, inModule];
+dimnames(modTOM) = list(modProbes, modProbes)
+cyt = exportNetworkToCytoscape(modTOM,
+edgeFile = paste("CytoscapeInput-edges-", ".txt", sep=""),
+nodeFile = paste("CytoscapeInput-nodes-", ".txt", sep=""),
+weighted = TRUE,
+threshold = 0.02,
+nodeNames = modProbes,
+nodeAttr = moduleColors[inModule]);
+
+
+
+
+
+
+
+
+
+
+pdf(file = "trait_heatmap.pdf");
+traitColors = numbers2colors(allTraits, signed = FALSE);
+plotDendroAndColors(sampleTree2, traitColors,
+groupLabels = names(allTraits),
+main = "Sample dendrogram and trait heatmap")
+dev.off()
+
+
+
+
+#trait cor
+nGenes = ncol(datExpr);
+nSamples = nrow(datExpr);
+# Recalculate MEs with color labels
+MEs0 = moduleEigengenes(datExpr, moduleColors)$eigengenes
+MEs = orderMEs(MEs0)
+moduleTraitCor = cor(MEs, allTraits, use = "p");
+moduleTraitPvalue = corPvalueStudent(moduleTraitCor, nSamples);
+pdf(file = "trait_cor_heatmap.pdf");
+# Will display correlations and their p-values
+textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
+signif(moduleTraitPvalue, 1), ")", sep = "");
+dim(textMatrix) = dim(moduleTraitCor)
+par(mar = c(6, 8.5, 3, 3));
+# Display the correlation values within a heatmap plot
+labeledHeatmap(Matrix = moduleTraitCor,
+xLabels = names(allTraits),
+yLabels = names(MEs),
+ySymbols = names(MEs),
+colorLabels = FALSE,
+colors = greenWhiteRed(50),
+textMatrix = textMatrix,
+setStdMargins = FALSE,
+cex.text = 0.5,
+zlim = c(-1,1),
+main = paste("Module-trait relationships"))
+
+dev.off()
+
